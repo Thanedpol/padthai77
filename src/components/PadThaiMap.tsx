@@ -13,6 +13,8 @@ import { FALLBACK_FOOD_IMAGES } from '../utils/placesService';
 interface PadThaiMapProps {
   selectedProvince: Province;
   places: PadThaiPlace[];
+  /** Place ids of featured shops (ร้านแนะนำ); their pins are highlighted. */
+  featuredIds?: Record<string, unknown>;
   selectedPlace: PadThaiPlace | null;
   userLocation: { lat: number; lng: number } | null;
   activeRoute: RouteSummary | null;
@@ -26,6 +28,7 @@ interface PlacePinMarkerProps {
   place: PadThaiPlace;
   index: number;
   isSelected: boolean;
+  isFeatured?: boolean;
   onSelect: (place: PadThaiPlace) => void;
   onCloseInfo: () => void;
   onComputeRoute: (place: PadThaiPlace) => void;
@@ -35,6 +38,7 @@ function PlacePinMarker({
   place,
   index,
   isSelected,
+  isFeatured = false,
   onSelect,
   onCloseInfo,
   onComputeRoute,
@@ -50,8 +54,10 @@ function PlacePinMarker({
       <AdvancedMarker
         ref={markerRef}
         position={place.location}
-        zIndex={isSelected ? 50 : 10 + Math.round((place.rating ?? 3) * 10)}
-        title={`${place.displayName}${place.rating !== null ? ` ★ ${place.rating.toFixed(1)}` : ''}`}
+        zIndex={
+          isSelected ? 50 : isFeatured ? 45 : 10 + Math.round((place.rating ?? 3) * 10)
+        }
+        title={`${isFeatured ? 'ร้านแนะนำ · ' : ''}${place.displayName}${place.rating !== null ? ` ★ ${place.rating.toFixed(1)}` : ''}`}
         onClick={() => onSelect(place)}
       >
         <div className="flex flex-col items-center cursor-pointer group">
@@ -59,9 +65,14 @@ function PlacePinMarker({
             className={`px-2.5 py-1 rounded-lg border shadow-md flex items-center gap-1.5 transition-transform duration-150 ${
               isSelected
                 ? 'bg-neutral-950 text-white border-neutral-950 scale-105 shadow-xl'
-                : 'bg-white text-neutral-950 border-neutral-300 group-hover:border-neutral-950 group-hover:scale-[1.03]'
+                : isFeatured
+                  ? 'bg-amber-400 text-neutral-950 border-amber-600 shadow-lg group-hover:scale-[1.03]'
+                  : 'bg-white text-neutral-950 border-neutral-300 group-hover:border-neutral-950 group-hover:scale-[1.03]'
             }`}
           >
+            {isFeatured && (
+              <span className="text-[9px] font-bold uppercase leading-none shrink-0">แนะนำ</span>
+            )}
             <span className="max-w-[128px] truncate text-[11px] font-semibold leading-none">
               {place.displayName}
             </span>
@@ -224,6 +235,7 @@ function MapCameraAndRouteController({
 export function PadThaiMap({
   selectedProvince,
   places,
+  featuredIds,
   selectedPlace,
   userLocation,
   activeRoute,
@@ -283,6 +295,7 @@ export function PadThaiMap({
             place={place}
             index={idx}
             isSelected={selectedPlace?.id === place.id}
+            isFeatured={Boolean(featuredIds?.[place.id])}
             onSelect={onSelectPlace}
             onCloseInfo={() => onSelectPlace(null)}
             onComputeRoute={onComputeRoute}

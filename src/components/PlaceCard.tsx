@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Heart, Share2, Star } from 'lucide-react';
 import type { PadThaiPlace } from '../types/padthai';
+import type { FeaturedShop } from '../data/featuredShops';
 import { FALLBACK_FOOD_IMAGES } from '../utils/placesService';
 import { useInViewOnce } from '../utils/useInViewOnce';
 
@@ -9,6 +10,8 @@ interface PlaceCardProps {
   index: number;
   isSelected: boolean;
   isFavorite: boolean;
+  /** Set when this shop is a paid featured shop (ร้านแนะนำ). */
+  featured?: FeaturedShop;
   onSelect: (place: PadThaiPlace) => void;
   onToggleFavorite: (place: PadThaiPlace) => void;
   onShare: (place: PadThaiPlace) => void;
@@ -19,6 +22,7 @@ export function PlaceCard({
   index,
   isSelected,
   isFavorite,
+  featured,
   onSelect,
   onToggleFavorite,
   onShare,
@@ -38,7 +42,9 @@ export function PlaceCard({
       className={`group rounded-xl border transition-all duration-150 overflow-hidden ${
         isSelected
           ? 'border-neutral-950 bg-neutral-50 shadow-sm'
-          : 'border-neutral-200 bg-white hover:border-neutral-400'
+          : featured
+            ? 'border-amber-400 bg-amber-50/40 hover:border-amber-500'
+            : 'border-neutral-200 bg-white hover:border-neutral-400'
       }`}
     >
       <div
@@ -66,9 +72,22 @@ export function PlaceCard({
 
         <div className="flex-1 min-w-0 flex flex-col justify-between">
           <div>
+            {featured && (
+              <div className="mb-1 flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-neutral-950">
+                  ร้านแนะนำ
+                </span>
+                <span className="text-[10px] leading-none text-neutral-500">สปอนเซอร์</span>
+              </div>
+            )}
             <h3 className="text-sm font-semibold text-neutral-950 truncate">
               {place.displayName}
             </h3>
+            {featured?.tagline && (
+              <p className="mt-0.5 text-xs font-medium text-amber-800 truncate">
+                {featured.tagline}
+              </p>
+            )}
 
             {/* Unboxed metadata row with typographic separators */}
             <div className="mt-1 flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-xs text-neutral-600 tabular-nums">

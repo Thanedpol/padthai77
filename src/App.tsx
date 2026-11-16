@@ -6,7 +6,7 @@ import {
   APILoadingStatus,
   useMapsLibrary,
 } from '@vis.gl/react-google-maps';
-import { AlertCircle, RotateCw, Search, Shuffle, X } from 'lucide-react';
+import { AlertCircle, Link2, Megaphone, RotateCw, Search, Shuffle, X } from 'lucide-react';
 import { FavoritesView } from './components/FavoritesView';
 import { PadThaiMap } from './components/PadThaiMap';
 import { PlaceCard } from './components/PlaceCard';
@@ -21,6 +21,15 @@ import {
   THAILAND_PROVINCES,
   findNearestProvince,
 } from './data/thailandProvinces';
+import {
+  ADVERTISE_CONTACT_URL,
+  buildFeaturedPreviewUrl,
+  getFeaturedForProvince,
+  readFeaturedPreviewFromUrl,
+  readProvinceIdFromUrl,
+  readSalesModeFromUrl,
+  type FeaturedShop,
+} from './data/featuredShops';
 import type {
   AppView,
   FavoriteRef,
@@ -62,7 +71,15 @@ function PadThaiWorkspace() {
   const routesLib = useMapsLibrary('routes');
 
   const [activeView, setActiveView] = useState<AppView>('map');
-  const [selectedProvince, setSelectedProvince] = useState<Province>(DEFAULT_PROVINCE);
+  const [selectedProvince, setSelectedProvince] = useState<Province>(() => {
+    const fromUrl = readProvinceIdFromUrl();
+    return THAILAND_PROVINCES.find((p) => p.id === fromUrl) ?? DEFAULT_PROVINCE;
+  });
+  // ?preview=<placeId>&province=<id> shows one shop as a featured shop (sales demo)
+  const [featuredPreview] = useState(readFeaturedPreviewFromUrl);
+  // ?sales=1 shows a button to copy that preview link for the selected shop
+  const [salesMode] = useState(readSalesModeFromUrl);
+  const featuredInjectAttemptedRef = useRef<Set<string>>(new Set());
   const [filters, setFilters] = useState<FilterState>({
     minRating: 0,
     openNowOnly: false,
@@ -237,6 +254,50 @@ function PadThaiWorkspace() {
     setSearchError(null);
   }, []);
 
+  const featuredShops = useMemo(
+    () => getFeaturedForProvince(selectedProvince.id, featuredPreview),
+    [selectedProvince.id, featuredPreview]
+  );
+
+  const featuredById = useMemo(() => {
+    const record: Record<string, FeaturedShop> = {};
+    for (const shop of featuredShops) record[shop.placeId] = shop;
+    return record;
+  }, [featuredShops]);
+
+  // A featured shop may not be in Google's top 20 for the province: fetch it
+  // by id (once per session) and add it to that province's list.
+  useEffect(() => {
+    if (!placesLib) return;
+    const list = placesByProvince[selectedProvince.id];
+    if (!list) return; // wait for the normal search first
+    const province = selectedProvince;
+    const missing = featuredShops.filter(
+      (shop) =>
+        !list.some((p) => p.id === shop.placeId) &&
+        !featuredInjectAttemptedRef.current.has(shop.placeId)
+    );
+    if (missing.length === 0) return;
+    for (const shop of missing) featuredInjectAttemptedRef.current.add(shop.placeId);
+
+    Promise.all(missing.map((shop) => fetchPlaceById(placesLib, shop.placeId, province))).then(
+      (fetched) => {
+        const found = fetched.filter((p): p is PadThaiPlace => p !== null);
+        if (found.length === 0) return;
+        setPlacesByProvince((prev) => {
+          const current = prev[province.id] ?? [];
+          const additions = found.filter((p) => !current.some((c) => c.id === p.id));
+          return additions.length ? { ...prev, [province.id]: [...current, ...additions] } : prev;
+        });
+        setPlacesById((prev) => {
+          const next = { ...prev };
+          for (const item of found) next[item.id] = prev[item.id] ?? item;
+          return next;
+        });
+      }
+    );
+  }, [placesLib, placesByProvince, selectedProvince, featuredShops]);
+
   const rawProvincePlaces = useMemo(
     () => customSearchResults ?? placesByProvince[selectedProvince.id] ?? [],
     [customSearchResults, placesByProvince, selectedProvince.id]
@@ -244,7 +305,7 @@ function PadThaiWorkspace() {
 
   const filteredPlaces = useMemo(() => {
     const kw = activeDetailedQuery ? '' : filters.searchKeyword.trim().toLowerCase();
-    return rawProvincePlaces.filter((place) => {
+    const matching = rawProvincePlaces.filter((place) => {
       if (filters.minRating > 0 && (place.rating ?? 0) < filters.minRating) {
         return false;
       }
@@ -257,7 +318,26 @@ function PadThaiWorkspace() {
       }
       return true;
     });
-  }, [rawProvincePlaces, filters, activeDetailedQuery]);
+    // Featured shops that pass the filters go first, in their configured order.
+    const pinned = featuredShops
+      .map((shop) => matching.find((p) => p.id === shop.placeId))
+      .filter((p): p is PadThaiPlace => Boolean(p));
+    if (pinned.length === 0) return matching;
+    return [...pinned, ...matching.filter((p) => !featuredById[p.id])];
+  }, [rawProvincePlaces, filters, activeDetailedQuery, featuredShops, featuredById]);
+
+  const handleCopyFeaturedPreview = useCallback(
+    async (place: PadThaiPlace) => {
+      const url = buildFeaturedPreviewUrl(place.id, place.provinceId);
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast(`คัดลอกลิงก์ตัวอย่างร้านแนะนำของ "${place.displayName}" แล้ว`);
+      } catch {
+        window.prompt('คัดลอกลิงก์นี้ส่งให้ร้าน', url);
+      }
+    },
+    [showToast]
+  );
 
   const favoriteIdSet = useMemo(() => {
     const record: Record<string, boolean> = {};
@@ -713,6 +793,13 @@ function PadThaiWorkspace() {
               </span>
             </div>
 
+            {featuredPreview && featuredPreview.provinceId === selectedProvince.id && (
+              <div className="px-4 py-2.5 border-b border-amber-200 bg-amber-50 text-xs text-amber-900">
+                <span className="font-semibold">ตัวอย่างร้านแนะนำ</span> · ร้านของคุณจะแสดงด้านบนสุดของ
+                {selectedProvince.nameTh} พร้อมป้าย "ร้านแนะนำ" และหมุดสีเด่นบนแผนที่
+              </div>
+            )}
+
             {/* Restaurant List */}
             <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 bg-neutral-50/50">
               {mapsFailed ? (
@@ -782,18 +869,35 @@ function PadThaiWorkspace() {
                   </button>
                 </div>
               ) : (
-                filteredPlaces.map((place, idx) => (
-                  <PlaceCard
-                    key={place.id}
-                    place={place}
-                    index={idx}
-                    isSelected={selectedPlace?.id === place.id}
-                    isFavorite={Boolean(favoriteIdSet[place.id])}
-                    onSelect={handleSelectPlace}
-                    onToggleFavorite={handleToggleFavorite}
-                    onShare={handleSharePlace}
-                  />
-                ))
+                <>
+                  {filteredPlaces.map((place, idx) => (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      index={idx}
+                      isSelected={selectedPlace?.id === place.id}
+                      isFavorite={Boolean(favoriteIdSet[place.id])}
+                      featured={featuredById[place.id]}
+                      onSelect={handleSelectPlace}
+                      onToggleFavorite={handleToggleFavorite}
+                      onShare={handleSharePlace}
+                    />
+                  ))}
+                  {ADVERTISE_CONTACT_URL && (
+                    <a
+                      href={ADVERTISE_CONTACT_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 flex items-center gap-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-900 hover:border-amber-500 hover:bg-amber-50 transition-colors"
+                    >
+                      <Megaphone className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      <span>
+                        <span className="font-semibold">เป็นเจ้าของร้านผัดไทยใน{selectedProvince.nameTh}?</span>{' '}
+                        ให้ร้านของคุณขึ้นเป็นร้านแนะนำด้านบนสุด
+                      </span>
+                    </a>
+                  )}
+                </>
               )}
             </div>
             </div>
@@ -811,6 +915,7 @@ function PadThaiWorkspace() {
             <PadThaiMap
               selectedProvince={selectedProvince}
               places={filteredPlaces}
+              featuredIds={featuredById}
               selectedPlace={selectedPlace}
               userLocation={userLocation}
               activeRoute={activeRoute}
@@ -857,6 +962,22 @@ function PadThaiWorkspace() {
           handleSelectPlace(picked);
         }}
       />
+
+      {salesMode && activeView === 'map' && selectedPlace && (
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2 shadow-lg max-w-[calc(100vw-32px)]">
+          <span className="text-[11px] text-neutral-600 truncate">
+            โหมดเซลส์ · {selectedPlace.displayName}
+          </span>
+          <button
+            type="button"
+            onClick={() => handleCopyFeaturedPreview(selectedPlace)}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-semibold text-neutral-950 hover:bg-amber-400"
+          >
+            <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+            คัดลอกลิงก์ตัวอย่าง
+          </button>
+        </div>
+      )}
 
       {toastMessage && (
         <div
