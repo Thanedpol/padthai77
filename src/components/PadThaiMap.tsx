@@ -93,7 +93,9 @@ function PlacePinMarker({
             className={`w-2 h-2 rotate-45 -mt-1 border-r border-b ${
               isSelected
                 ? 'bg-neutral-950 border-neutral-950'
-                : 'bg-white border-neutral-300 group-hover:border-neutral-950'
+                : isFeatured
+                  ? 'bg-amber-400 border-amber-600'
+                  : 'bg-white border-neutral-300 group-hover:border-neutral-950'
             }`}
           />
         </div>
