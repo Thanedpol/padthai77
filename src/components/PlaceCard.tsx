@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Heart, Share2, Star } from 'lucide-react';
 import type { PadThaiPlace } from '../types/padthai';
 import { FALLBACK_FOOD_IMAGES } from '../utils/placesService';
+import { useInViewOnce } from '../utils/useInViewOnce';
 
 interface PlaceCardProps {
   place: PadThaiPlace;
@@ -24,10 +25,16 @@ export function PlaceCard({
 }: PlaceCardProps) {
   const [imgError, setImgError] = useState(false);
   const fallbackSrc = FALLBACK_FOOD_IMAGES[index % FALLBACK_FOOD_IMAGES.length];
-  const displayImg = !imgError && place.photoUrl ? place.photoUrl : fallbackSrc;
+  // Google Place Photos are billed per request: only fetch the real photo
+  // once this card has actually been on screen (or the user selected it).
+  const [cardRef, hasBeenSeen] = useInViewOnce<HTMLElement>();
+  const mayLoadPhoto = hasBeenSeen || isSelected;
+  const displayImg =
+    !imgError && mayLoadPhoto && place.photoUrl ? place.photoUrl : fallbackSrc;
 
   return (
     <article
+      ref={cardRef}
       className={`group rounded-xl border transition-all duration-150 overflow-hidden ${
         isSelected
           ? 'border-neutral-950 bg-neutral-50 shadow-sm'

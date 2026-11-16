@@ -62,8 +62,11 @@ export function RandomizerModal({
 
   if (!isOpen) return null;
 
+  // Each Google Place Photo request is billed: while the shuffle animation is
+  // cycling through shops, show the local fallback and only fetch the real
+  // photo for the final pick.
   const displayImg =
-    !imgError && candidate?.photoUrl
+    !isSpinning && !imgError && candidate?.photoUrl
       ? candidate.photoUrl
       : FALLBACK_FOOD_IMAGES[1];
 
