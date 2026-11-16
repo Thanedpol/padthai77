@@ -1,0 +1,6 @@
+{
+  "name": "PadThai 77 — ค้นหาร้านผัดไทยทั่วไทย 77 จังหวัด",
+  "description": "ค้นหาร้านผัดไทยเด็ดทั่วประเทศไทยครบทั้ง 77 จังหวัดบน Google Maps พร้อมแผนที่ไทย 3 มิติ ระบบสุ่มร้านเด็ด เส้นทาง และรายการร้านโปรด",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
