@@ -18,8 +18,8 @@ export function getGoogleMapsApiKey(): string {
 }
 
 export const FALLBACK_FOOD_IMAGES = [
-  '/src/assets/images/padthai_classic_shrimp_1794811637414.jpg',
-  '/src/assets/images/padthai_street_wok_1794811638753.jpg',
+  `${import.meta.env.BASE_URL}src/assets/images/padthai_classic_shrimp_1794811637414.jpg`,
+  `${import.meta.env.BASE_URL}src/assets/images/padthai_street_wok_1794811638753.jpg`,
 ];
 
 function checkAndNotifyQuotaError(err: unknown): boolean {
